@@ -23,8 +23,6 @@ public class Go implements ActionListener {
 
     int gridSize;
 
-    ArrayList<List<Integer>> currGroup;
-
     String restoreColor;
 
     String white = "O";
@@ -35,7 +33,7 @@ public class Go implements ActionListener {
     }
 
     Go(int gridSize) {
-        this.gridSize = 9;
+        this.gridSize = gridSize;
         cells = new JButton[gridSize][gridSize];
 
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -85,7 +83,7 @@ public class Go implements ActionListener {
         cells[i][j].setText("");
     }
 
-    //check if we are at a black cell
+    // check if we are at a black cell
     public boolean atBlack(int i, int j) {
         if (cells[i][j].getText() == "X") {
             return true;
@@ -93,13 +91,11 @@ public class Go implements ActionListener {
         return false;
     }
 
+    // checks if a group is alive
+    // first floodfill the group, gather all the cells part of the group
+    // then, count the number of total empty spaces, if < 2, return false
+    public boolean isAlive(int row, int col, ArrayList<List<Integer>> floodfillGroup) {
 
-    //checks if a group is alive
-    //first floodfill the group, gather all the cells part of the group
-    //then, count the number of total empty spaces, if < 2, return false
-    public boolean isAlive(int row, int col) {
-
-        ArrayList<List<Integer>> floodfillGroup = fetchGroup(row, col);
         int totalAir = 0;
 
         for (List<Integer> coord : floodfillGroup) {
@@ -127,19 +123,19 @@ public class Go implements ActionListener {
 
         int res = 0;
 
-        //top
+        // top
         if (row > 0 && isEmptyCell(row - 1, col)) {
             res += 1;
         }
-        //left
+        // left
         if (col > 0 && isEmptyCell(row, col - 1)) {
             res += 1;
         }
-        //bottom
+        // bottom
         if (row < this.gridSize - 1 && isEmptyCell(row + 1, col)) {
             res += 1;
         }
-        //right
+        // right
         if (col < this.gridSize - 1 && isEmptyCell(row, col + 1)) {
             res += 1;
         }
@@ -147,26 +143,30 @@ public class Go implements ActionListener {
         return res;
     }
 
-    public void floodfill(int row, int col, String target, Set<List<Integer>> visited) {
-        if (row < 0 || col < 0 || row >= gridSize || col >= gridSize || cells[row][col].getText() != target || visited.contains(Arrays.asList(row, col))) {
+    public void floodfill(int row, int col, String target, Set<List<Integer>> visited,
+            ArrayList<List<Integer>> currGroup) {
+        if (row < 0 || col < 0 || row >= gridSize || col >= gridSize || cells[row][col].getText() != target
+                || visited.contains(Arrays.asList(row, col))) {
             return;
         }
         currGroup.add(Arrays.asList(row, col));
         visited.add(Arrays.asList(row, col));
         for (List<Integer> neighbor : getSurrounding(row, col)) {
             if (target == black && atBlack(neighbor.get(0), neighbor.get(1))) {
-                floodfill(neighbor.get(0), neighbor.get(1), target, visited);
+                floodfill(neighbor.get(0), neighbor.get(1), target, visited, currGroup);
             }
             if (target == white && !atBlack(neighbor.get(0), neighbor.get(1))) {
-                floodfill(neighbor.get(0), neighbor.get(1), target, visited);
+                floodfill(neighbor.get(0), neighbor.get(1), target, visited, currGroup);
             }
         }
 
     }
 
-    //floodfills a group to get the whole patch that contains the current cell
+    // floodfills a group to get the whole patch that contains the current cell
     public ArrayList<List<Integer>> fetchGroup(int row, int col) {
-        currGroup = new ArrayList<List<Integer>>();
+
+        ArrayList<List<Integer>> currGroup = new ArrayList<List<Integer>>();
+
         String target;
         if (atBlack(row, col)) {
             target = black;
@@ -175,7 +175,7 @@ public class Go implements ActionListener {
         }
 
         Set<List<Integer>> tempSet = new HashSet<List<Integer>>();
-        floodfill(row, col, target, tempSet);
+        floodfill(row, col, target, tempSet, currGroup);
 
         return currGroup;
     }
@@ -199,7 +199,7 @@ public class Go implements ActionListener {
 
     }
 
-    //returns surrounding cells that are opponent cells
+    // returns surrounding cells that are opponent cells
     public ArrayList<List<Integer>> toCheck(int row, int col) {
 
         ArrayList<List<Integer>> toCheck = new ArrayList<List<Integer>>();
@@ -225,7 +225,7 @@ public class Go implements ActionListener {
     public void updateBoard(int row, int col) {
 
         ArrayList<List<Integer>> toCheck = toCheck(row, col);
-
+        System.out.println(toCheck);
         for (List<Integer> pos : toCheck) {
 
             int r = pos.get(0);
@@ -233,7 +233,7 @@ public class Go implements ActionListener {
 
             ArrayList<List<Integer>> floodfillGroup = fetchGroup(r, c);
 
-            if (isAlive(r, c) == false) {
+            if (isAlive(r, c, floodfillGroup) == false) {
                 restoreColor = getOpponentColor(r, c);
                 for (List<Integer> toReset : floodfillGroup) {
                     resetCell(toReset.get(0), toReset.get(1));
@@ -253,7 +253,7 @@ public class Go implements ActionListener {
 
             ArrayList<List<Integer>> floodfillGroup = fetchGroup(r, c);
 
-            if (isAlive(r, c) == false) {
+            if (isAlive(r, c, floodfillGroup) == false) {
                 return floodfillGroup;
             }
         }
@@ -284,9 +284,8 @@ public class Go implements ActionListener {
         restoreColor = "";
     }
 
-
-    //try placing the piece down
-    //if the group dies, return false
+    // try placing the piece down
+    // if the group dies, return false
     public boolean isValidPosition(int row, int col) {
 
         ArrayList<List<Integer>> placesToRestore = getToRestore(row, col);
@@ -296,7 +295,7 @@ public class Go implements ActionListener {
             setColor(row, col, black);
             updateBoard(row, col);
 
-            if (isAlive(row, col)) {
+            if (isAlive(row, col, fetchGroup(row, col))) {
 
                 unUpdateBoard(placesToRestore);
                 resetCell(row, col);
@@ -313,7 +312,7 @@ public class Go implements ActionListener {
             setColor(row, col, white);
             updateBoard(row, col);
 
-            if (isAlive(row, col)) {
+            if (isAlive(row, col, fetchGroup(row, col))) {
 
                 unUpdateBoard(placesToRestore);
                 resetCell(row, col);
@@ -335,8 +334,6 @@ public class Go implements ActionListener {
             for (int j = 0; j < cells.length; j++) {
                 if (e.getSource() == cells[i][j]) {
                     if (cells[i][j].getText() == "" && isValidPosition(i, j)) {
-
-
                         if (black_turn) {
                             setColor(i, j, black);
                             textfield.setText("white turn");
@@ -348,7 +345,7 @@ public class Go implements ActionListener {
                         black_turn = !black_turn;
 
                         updateBoard(i, j);
-
+                        printState();
                     }
                 }
             }
@@ -364,11 +361,34 @@ public class Go implements ActionListener {
                     row += " ";
                 } else {
                     row += cells[i][j].getText();
+                    if (cells[i][j].getText() == "X") {
+                    } else {
+                    }
                 }
             }
             System.out.println(row);
         }
+
     }
 
-
+    public ArrayList<ArrayList<Integer>> getState() {
+        ArrayList<ArrayList<Integer>> currBoard = new ArrayList<ArrayList<Integer>>();
+        for (int i = 0; i < this.gridSize; i++) {
+            ArrayList<Integer> temp = new ArrayList<Integer>();
+            for (int j = 0; j < this.gridSize; j++) {
+                if (cells[i][j].getText() == "") {
+                    temp.add(-1);
+                } else {
+                    if (cells[i][j].getText() == "X") {
+                        temp.add(1);
+                    } else {
+                        temp.add(0);
+                    }
+                }
+            }
+            currBoard.add(temp);
+            // System.out.println(row);
+        }
+        return currBoard;
+    }
 }
